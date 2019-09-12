@@ -212,7 +212,7 @@ def parse_args():
 def main(colors=None):
 
 	path, descriptor, umap, pca = parse_args()
-	assert descriptor in ["morgan", "mordred" ,"daylight"], "Descriptor type does not exist"
+	assert descriptor in ["morgan", "mordred"], "Descriptor type does not exist"
 	if descriptor == "morgan":
 		descriptors = MorganFingerprints(path)
 	elif descriptor == "mordred":
