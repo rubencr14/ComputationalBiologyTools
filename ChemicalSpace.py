@@ -23,14 +23,18 @@ from mordred import Calculator
 from mordred import descriptors as desc
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import matplotlib
+from matplotlib import patches
 from pathos.multiprocessing import ProcessingPool as Pool
 from rdkit import DataStructs
+from matplotlib.lines import Line2D
 matplotlib.rcParams.update({"font.size": 22})
+plt.style.use("seaborn-pastel")
 
 __author__="Ruben Canadas"
 __mail__ = "rubencr14@gmail.com"
 __maintainer__="Ruben Canadas"
 __version__=1.0
+
 
 class LigandDescriptors(object):
 	
@@ -61,7 +65,7 @@ class LigandDescriptors(object):
 		return self._pdbs
 
 
-	def plot_chemical_space(self, embedding, colors=None):
+	def plot_chemical_space(self, embedding, legend_elements, colors=None):
 
 		if colors is None:
 			colors = [0 for _ in range(len(self._pdbs))]
@@ -80,12 +84,12 @@ class LigandDescriptors(object):
 		annot = AnnotationBbox(im, xy=(0,0), xybox=(1.2, 0.5), boxcoords="offset points")
 		ax.add_artist(annot)
 		annot.set_visible(False)
-		annot1.set_visible(False)
-		matplotlib.rcParams.update({"font.size": 22})
-		with plt.style.context("seaborn-pastel"):
-			sc = plt.scatter(embedding[:, 0], embedding[:, 1], c = colors, s=200, alpha=1, edgecolors="k")
-			ax.set_xlabel("PCA 1", fontsize=26, labelpad=25)
-			ax.set_ylabel("PCA 2", fontsize=26, labelpad=30)
+		annot1.set_visible(False)		
+		sc = plt.scatter(embedding[:, 0], embedding[:, 1], c = colors, s=200, alpha=1, edgecolors="k")
+		if legend_elements is not None:
+			ax.legend(handles=legend_elements)
+		ax.set_xlabel("PCA 1", fontsize=26, labelpad=25)
+		ax.set_ylabel("PCA 2", fontsize=26, labelpad=30)
 
 
 		def update_annot(ind):
@@ -117,7 +121,7 @@ class LigandDescriptors(object):
 		plt.show()
 
 
-	def project_umap(self, X, n_neighbors=9, min_dist=0.6, random_state=2019):
+	def project_umap(self, X, n_neighbors=9, min_dist=0.9, random_state=2019):
 
 		reducer = umap.UMAP(n_neighbors=n_neighbors, min_dist=min_dist, random_state=random_state)
 		return reducer.fit_transform(X)
@@ -209,10 +213,10 @@ def parse_args():
 
 	return args.path, args.type, args.umap, args.pca
 
-def main(colors=None):
+def main(legend_elements=None, colors=None):
 
 	path, descriptor, umap, pca = parse_args()
-	assert descriptor in ["morgan", "mordred"], "Descriptor type does not exist"
+	assert descriptor in ["morgan", "mordred" ,"daylight"], "Descriptor type does not exist"
 	if descriptor == "morgan":
 		descriptors = MorganFingerprints(path)
 	elif descriptor == "mordred":
@@ -223,7 +227,7 @@ def main(colors=None):
 		embedding = descriptors.project_umap(embedding)
 	elif pca:
 		embedding = descriptors.project_pca(embedding)
-	descriptors.plot_chemical_space(embedding, colors)
+	descriptors.plot_chemical_space(embedding, legend_elements, colors)
 
 
 
@@ -231,4 +235,7 @@ if __name__=="__main__":
 
 	#Colors for specifying mutant, wild-type and both
 	colors = [0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 2, 1, 1, 0, 1, 0, 2, 0, 0, 0, 0, 0, 1, 0] 
-	main(colors)
+	legend_elements = [Line2D([0], [0], marker="o", color="w", label="Mutant", markerfacecolor="#97F0AA", markersize=10, markeredgecolor="k"),
+							Line2D([0], [0], marker="o", color="w", label="Both", markerfacecolor="#92C6FF", markersize=10, markeredgecolor="k"),
+							Line2D([0], [0], marker="o", color="w", label="WT", markerfacecolor="#FF9F9A", markersize=10, markeredgecolor="k")]
+	main(legend_elements, colors)
