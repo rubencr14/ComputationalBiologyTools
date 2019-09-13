@@ -17,11 +17,17 @@ import glob, os, sys, argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import itertools 
+import matplotlib
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+matplotlib.rcParams.update({"font.size": 22})
+plt.style.use("seaborn-pastel")
 
-
-#plt.style.use(['seaborn-darkgrid'])
-
-
+__author__="Ruben Canadas"
+__mail__ = "rubencr14@gmail.com"
+__maintainer__="Ruben Canadas"
+__version__=1.0
 
 
 class OpenFiles:
@@ -44,37 +50,26 @@ class OpenFiles:
 
         return md.load_xtc(self.xtc_file, self.top_file)
 
-
     def load_trr(self):
 
         return md.load_trr(self.trr_file, self.top_file)
-
-
 
     def load_trajectory(self):
 
         return md.load(self.file, self.top_file)
 
-
-
     def information(self, file):
-
 
         with open("trajectory_info.txt", "w") as outfile:
             outfile.write("Number of frames: {}\nnumber of atoms: {}\nnumber of residues: {}\number of chains: {}\n\n".format(file.n_frames,
             file.n_atoms, file.n_residues, file.n_chains))
 
-
     def number_frames(self, file):
-
-
 
         return file.n_frames
 
 
-
 class directory_manager:
-
 
     def __init__(self, directory):
 
@@ -83,15 +78,9 @@ class directory_manager:
     def create_directory(self):
 
         if not os.path.exists(self.directory):
-
             os.mkdir(self.directory)
-
         else:
-
             pass
-
-
-
 
 class TrajectoryProperties:
 
@@ -103,7 +92,6 @@ class TrajectoryProperties:
 
         self.traj = traj
         self.metric = metric
-
 
 
     def nanometer_to_angstrom(func):
@@ -126,13 +114,10 @@ class TrajectoryProperties:
 
         return md.rmsd(self.traj, reference_frame)
 
-
-
    # @nanometer_to_angstrom
     def compute_distance(self, atom_pairs):
 
         """
-
 
         :param atom_pairs: Each row gives the indices of two atoms involved in the interaction: np.ndarray, shape=(num_pairs, 2), dtype=int
         :return: distances : np.ndarray, shape=(n_frames, num_pairs), dtype=float (The distance, in each frame, between each pair of atoms)
@@ -154,7 +139,6 @@ class TrajectoryProperties:
 
         return md.displacements(self.traj, atom_pairs)
 
-
     @nanometer_to_angstrom #Decorator for transforming array in nanometer to array in angstroms
     def compute_contacts(self, residue_pairs):
 
@@ -167,7 +151,6 @@ class TrajectoryProperties:
 
         return md.compute_contacts(self.traj, residue_pairs)
 
-
     def compute_angles(self, angle_indices):
 
         """
@@ -178,7 +161,6 @@ class TrajectoryProperties:
         """
 
         return md.compute_angles(self.traj, angle_indices)
-
 
     def compute_dihedrals(self, indices):
 
@@ -192,7 +174,43 @@ class TrajectoryProperties:
 
         return md.compute_dihedrals(self.traj, indices)
 
+    def compute_hbonds(self, plot=True, color=itertools.cycle(["r","b","gold", "g"]), hbonds_to_plot=[14,15,16, 17]):
 
+        """
+
+        """
+
+        hbonds = md.baker_hubbard(self.traj, periodic=False)
+        label = lambda hbond: "%s -- %s" % (self.traj.topology.atom(hbond[0]), self.traj.topology.atom(hbond[2]))
+        dist = md.compute_distances(self.traj, hbonds[:, [0, 2]], periodic=False)
+        for hbond in hbonds:
+            print(label(hbond))
+        if plot:
+            for i in hbonds_to_plot:
+                plt.hist(dist[:,i], color=next(color), label=label(hbonds[i]), alpha=0.5)
+            plt.legend()
+            plt.ylabel("Freq", labelpad=20)
+            plt.xlabel("donor-receptor distance [nm]", labelpad=20)
+            plt.show()
+
+    
+    def pca_analysis(self, scale=True, xlabel="PC1", ylabel="PC2", fontsize=20, labelpad=20):
+
+        """
+
+        """
+        
+        pca = PCA(n_components=2)
+        self.traj.superpose(self.traj, 0)
+        if scale:
+            reduced = pca.fit_transform(StandardScaler().fit_transform(self.traj.xyz.reshape(self.traj.n_frames, self.traj.n_atoms * 3)))
+        else:
+            reduced = reduced = pca.fit_transform(self.traj.xyz.reshape(self.traj.n_frames, self.traj.n_atoms * 3))
+        plt.scatter(reduced[:,0], reduced[:,1], marker="o", c=self.traj.time)
+        plt.xlabel(xlabel, fontsize=fontsize, labelpad=labelpad)
+        plt.ylabel(ylabel, fontsize=fontsize, labelpad=labelpad)
+        cbar = plt.colorbar(); cbar.set_label("Time [ps]")
+        plt.show()
 
     def compute_sasa(self, radius=0.14, mode="residue"):
 
@@ -209,11 +227,7 @@ class TrajectoryProperties:
 
         """
 
-
         return md.shrake_rupley(self.traj, probe_radius = radius, mode=mode)
-
-
-
 
     def compute_radius_of_gyration(self):
 
@@ -224,8 +238,6 @@ class TrajectoryProperties:
         """
 
         return md.compute_rg(self.traj)
-
-
 
     def compute_inertia_tensor(self):
 
@@ -241,9 +253,7 @@ class TrajectoryProperties:
 
 class Plotter:
 
-
-
-    def __init__(self, x_axis, y_axis, figure_name, style="ggplot", z_axis=None, plot=False, save=True):
+    def __init__(self, x_axis, y_axis, figure_name, style="seaborn-pastel", z_axis=None, plot=False, save=True):
 
 
         self.x_axis = x_axis
@@ -262,8 +272,6 @@ class Plotter:
 
         plt.style.use(style)
 
-
-
     def scatter_plot(self):
 
         plt.plot(self.x_axis, self.y_axis)
@@ -275,21 +283,16 @@ class Plotter:
         if self.save: plt.savefig(os.path.join(self.path, "md_{}_plot.png".format(self.figure_name)),dpi=self.dpis)
         plt.clf()
 
-
     def box_plot(self):
 
 
         sns.boxplot(self.y_axis, orient="v")
         plt.title(self.title);
-        plt.xlabel(self.x_label);
-        plt.ylabel(self.y_label)
+        plt.xlabel(self.x_label, labelpad=20);
+        plt.ylabel(self.y_label, labelpad=20)
         if self.plot:plt.show()
         if self.save: plt.savefig(os.path.join(self.path, "md_{}_boxplot.png".format(self.figure_name)), dpi=self.dpis)
         plt.clf()
-
-
-
-
 
     def superpose_plots(self, Y_array):
 
@@ -306,14 +309,9 @@ class Plotter:
         for array in Y_array:
             plt.plot(self.x_axis, array)
 
-
         if self.plot: plt.show()
         if self.save: plt.savefig(self.path, dpi=self.dpis)
         plt.clf()
-
-
-
-
 
 
 def parse_args():
@@ -332,31 +330,34 @@ def parse_args():
     parser.add_argument("-plot_style","--plot_style", type=str, help="Style of the plots (default=ggplot)", default="ggplot")
     parser.add_argument("-plot", "--plot", help="Show plots", action="store_true")
     parser.add_argument("-save_plot", "--save_plot", help="Save plots in directory", action="store_true")
+    parser.add_argument("-rep", "--replicas", help="Compute mean of the replicas", type=str, nargs="+")
+    parser.add_argument("-p", "--pca", help="PCA analysis of the trajectory", action="store_true")
+    parser.add_argument("-hb", "--hbond", help="Compute hbond distribution", action="store_true")
 
     args = parser.parse_args()
 
     return args.xtc, args.top, args.distance, args.contact, args.displacement, args.gyration , args.sasa, \
-           args.plot_style, args.plot, args.save_plot
-
-
-
-
-
+           args.plot_style, args.plot, args.save_plot, args.replicas, args.pca, args.hbond
 
 
 def main():
 
+    
 
-
-    xtc, top, distance, contact, displacement, gyration, sasa, plot_style, plot, save_plot = parse_args()
+    xtc, top, distance, contact, displacement, gyration, sasa, plot_style, plot, save_plot, replicas, pca, hbond = parse_args()
     xtc = OpenFiles(xtc, top)
-
     traj = xtc.load_xtc()
     prop = TrajectoryProperties(traj)
     number_of_frames =  xtc.number_frames(traj)
     x_axis  = np.arange(0,number_of_frames,1)
 
+    if pca:
 
+        prop.pca_analysis()
+
+    if hbond:
+
+        prop.compute_hbonds()
 
     if distance is not None:
 
@@ -365,7 +366,7 @@ def main():
         pl.scatter_plot()
         pl.box_plot()
 
-
+        print("distances ", distances)
 
     if contact is not None:
 
@@ -374,12 +375,15 @@ def main():
         pl.scatter_plot()
         pl.box_plot()
 
+    if sasa:
 
-
+        sasa =prop.compute_sasa()
+        print("sasa ", sasa)
 
 
 if __name__=="__main__":
     main()
+
 
 
 
