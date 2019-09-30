@@ -39,12 +39,20 @@ __version__=1.0
 class LigandDescriptors(object):
 	
 
-	def __init__(self, path):
+	def __init__(self, path, list_of_smiles):
 
 		self._path = path
-		self._pdbs = sorted([files for files in os.listdir(self._path) if files.endswith(".pdb")])
-		self._mols = [Chem.MolFromPDBFile(os.path.join(self._path, pdb)) for pdb in self._pdbs]
-		self._draw_ligands()
+		if list_of_smiles is None:
+			self._pdbs = sorted([files for files in os.listdir(self._path) if files.endswith(".pdb")])
+			self._mols = [Chem.MolFromPDBFile(os.path.join(self._path, pdb)) for pdb in self._pdbs]
+			self._draw_ligands()
+		elif list_of_smiles is not None:
+			self._mols = [Chem.MolFromSmiles(smile_compound) for smile_compound in list_of_smiles] 
+			self._draw_ligands_from_smiles()
+			self._pdbs = sorted([files.split(".")[0] for files in os.listdir(os.path.join(self._path, "images")) if files.endswith(".png")])
+			print("smile")
+		else:
+			raise ValueError("No pdb or smile compounds found!")
 
 	def _draw_ligands(self):
 
@@ -54,11 +62,26 @@ class LigandDescriptors(object):
 			for mol, pdb in zip(self._mols, self._pdbs):
 				Draw.MolToFile(mol, os.path.join(self._im_path, "{}.png".format(pdb.split(".")[0])), size=(500, 500))
 
+	def _draw_ligands_from_smiles(self):
+	
+		self._im_path = os.path.join(self._path, "images")
+		if not os.path.exists(self._im_path):
+			os.mkdir(self._im_path)
+			for i,mol in enumerate(self._mols):
+				Draw.MolToFile(mol, os.path.join(self._im_path, "compound_{}.png".format(i)), size=(500, 500))
+				print("index ", i)
+
+
+
 	def __str__(self):
 		return "List of ligands: {}".format(self._pdbs)
 
 	def __getitem__(self, index):
 		return self._pdbs[index]
+
+	@staticmethod
+	def get_mol_from_smiles(list_of_smiles):
+		return [Chem.MolFromSmiles(smile_compound) for smile_compound in list_of_smiles]
 
 	@property
 	def pdbs(self):
@@ -88,8 +111,8 @@ class LigandDescriptors(object):
 		sc = plt.scatter(embedding[:, 0], embedding[:, 1], c = colors, s=200, alpha=1, edgecolors="k")
 		if legend_elements is not None:
 			ax.legend(handles=legend_elements)
-		ax.set_xlabel("PCA 1", fontsize=26, labelpad=25)
-		ax.set_ylabel("PCA 2", fontsize=26, labelpad=30)
+		ax.set_xlabel("PC 1", fontsize=26, labelpad=25)
+		ax.set_ylabel("PC 2", fontsize=26, labelpad=30)
 
 
 		def update_annot(ind):
@@ -135,11 +158,10 @@ class LigandDescriptors(object):
 
 class MorganFingerprints(LigandDescriptors):
 	
-	def __init__(self, path):
-		super(MorganFingerprints, self).__init__(path)
+	def __init__(self, path, list_of_smiles=None):
+		super(MorganFingerprints, self).__init__(path, list_of_smiles)
 
-	def compute_descriptors(self):
-		
+	def compute_descriptors(self):		
 		return self.__morgan_fingerprints()
 
 	def __morgan_fingerprints(self):
@@ -166,8 +188,8 @@ class MorganFingerprints(LigandDescriptors):
 class CompoundDescriptors(LigandDescriptors):
 
 
-	def __init__(self, path):
-		super(CompoundDescriptors, self).__init__(path)
+	def __init__(self, path, list_of_smiles=None):
+		super(CompoundDescriptors, self).__init__(path, list_of_smiles)
 
 	def compute_descriptor(self, mol):
 
@@ -213,14 +235,14 @@ def parse_args():
 
 	return args.path, args.type, args.umap, args.pca
 
-def main(legend_elements=None, colors=None):
+def main(list_of_smiles, legend_elements=None, colors=None):
 
 	path, descriptor, umap, pca = parse_args()
 	assert descriptor in ["morgan", "mordred" ,"daylight"], "Descriptor type does not exist"
 	if descriptor == "morgan":
-		descriptors = MorganFingerprints(path)
+		descriptors = MorganFingerprints(path, list_of_smiles=list_of_smiles)
 	elif descriptor == "mordred":
-		descriptors = CompoundDescriptors(path)
+		descriptors = CompoundDescriptors(path, list_of_smiles=list_of_smiles)
 
 	embedding = descriptors.compute_descriptors()
 	if umap:
@@ -234,8 +256,14 @@ def main(legend_elements=None, colors=None):
 if __name__=="__main__":
 
 	#Colors for specifying mutant, wild-type and both
+	csv = "/home/rubencr/Desktop/phD/BACE_1/bace1_dataset/bace1_compounds.csv"
+	df = pd.read_csv(csv)
+	smiles = [elem for elem in df["Canonical_Smiles"].values if str(elem) != "nan"]
+
+	"""
 	colors = [0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 2, 1, 1, 0, 1, 0, 2, 0, 0, 0, 0, 0, 1, 0] 
 	legend_elements = [Line2D([0], [0], marker="o", color="w", label="Mutant", markerfacecolor="#97F0AA", markersize=10, markeredgecolor="k"),
 							Line2D([0], [0], marker="o", color="w", label="Both", markerfacecolor="#92C6FF", markersize=10, markeredgecolor="k"),
 							Line2D([0], [0], marker="o", color="w", label="WT", markerfacecolor="#FF9F9A", markersize=10, markeredgecolor="k")]
-	main(legend_elements, colors)
+	"""
+	main(list_of_smiles = smiles)
